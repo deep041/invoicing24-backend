@@ -1,6 +1,8 @@
 const user = require('./user.controller');
-const loginRegister = require('./login_register.controller');
+const loginRegister = require('./loginRegister.controller');
 const customer = require('./customer.controller');
 const item = require('./item.controller');
+const companyDetails = require('./companyDetails.controller');
+const invoice = require('./invoice.controller');
 
-module.exports = { user, loginRegister, customer, item };
+module.exports = { user, loginRegister, customer, item, companyDetails, invoice };
