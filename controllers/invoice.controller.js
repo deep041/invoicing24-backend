@@ -1,25 +1,73 @@
 const invoice = require('../modals').invoice;
 const sendResponse = require('../utils/response');
+const mongoose = require('mongoose');
 
 const getInvoices = async (req, res, next) => {
-    await invoice.find({ 'userId': req.user.id }).then((result, err) => {
+    const userId = new mongoose.Types.ObjectId(req.user.id);
+    await invoice.aggregate([
+        { $match: { userId: userId } },
+        {
+            $addFields: {
+                items: {
+                    $map: {
+                        input: "$items",
+                        as: "item",
+                        in: {
+                            name: "$$item.name",
+                            price: "$$item.price",
+                            quantity: "$$item.quantity",
+                            discount: "$$item.discount",
+                            discountType: "$$item.discountType",
+                            id: "$$item.id",
+                            itemTotal: {
+                                $cond: [
+                                    { $eq: ["$$item.discountType", "percentage"] },
+                                    {
+                                        $multiply: [
+                                            "$$item.price",
+                                            "$$item.quantity",
+                                            { $subtract: [1, { $divide: ["$$item.discount", 100] }] }
+                                        ]
+                                    },
+                                    {
+                                        $subtract: [
+                                            { $multiply: ["$$item.price", "$$item.quantity"] },
+                                            "$$item.discount"
+                                        ]
+                                    }
+                                ]
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        {
+            $addFields: {
+                grandTotal: { $sum: "$items.itemTotal" }
+            }
+        },
+        {
+            $project: { grandTotal: 1, customerName: '$customerDetails.name', invoiceNumber: 1, invoiceDate: 1 }
+        }
+    ]).then((result, err) => {
         if (result) {
             sendResponse(res, 200, 200, true, 'Data retrieved successfully', result);
         } else {
-            sendResponse(res, 200, 404, true, 'Failed', result);
+            sendResponse(res, 200, 404, true, 'Error while data fetching', result);
         }
     });
 }
 
 const createInvoice = async (req, res, next) => {
     let invoiceData = {
-        companyDetails: { 
+        companyDetails: {
             name: req.body.companyDetails.name,
             contactNo: req.body.companyDetails.contactNo,
             address: req.body.companyDetails.address,
             id: req.body.companyDetails.id
         },
-        customerDetails: { 
+        customerDetails: {
             name: req.body.customerDetails.name,
             contactNo: req.body.customerDetails.contactNo,
             address: req.body.customerDetails.address,
@@ -42,9 +90,9 @@ const createInvoice = async (req, res, next) => {
 
     invoice.create(invoiceData).then((result, err) => {
         if (result) {
-            sendResponse(res, 200, 200, true, 'Item created successfully!', result);
+            sendResponse(res, 200, 200, true, 'Invoice created successfully!', result);
         } else {
-            sendResponse(res, 200, 403, false, 'Item creation failed', result);
+            sendResponse(res, 200, 403, false, 'Invoice creation failed', result);
         }
     });
 }
