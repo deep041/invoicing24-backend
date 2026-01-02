@@ -133,4 +133,20 @@ const getInvoiceById = async (req, res, next) => {
     });
 }
 
-module.exports = { getInvoices, createInvoice, getInvoiceById }
+const getLatestInvoiceNumber = async (req, res, next) => {
+    const userId = req.user.id;
+    console.log(userId)
+    await invoice.findOne({ userId: userId }).sort({ invoiceNumber: -1 }).then((result, err) => {
+        if (result) {
+            let invoiceNumber = 1;
+            if (result && result.invoiceNumber) {
+                invoiceNumber = Number(result.invoiceNumber) + 1;
+            }
+            sendResponse(res, 200, 200, true, 'Data retrieved successfully', { invoiceNumber });
+        } else {
+            sendResponse(res, 200, 404, true, 'Error while data fetching', result);
+        }
+    });
+}
+
+module.exports = { getInvoices, createInvoice, getInvoiceById, getLatestInvoiceNumber }
