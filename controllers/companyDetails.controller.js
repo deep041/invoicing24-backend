@@ -16,6 +16,8 @@ const addCompanyDetails = async (req, res, next) => {
         name: req.body.name,
         contactNo: req.body.contactNo,
         address: req.body.address,
+        stateCode: req.body.stateCode,
+        gstNo: req.body.gstNo,
         userId: req.user.id
     }
 
