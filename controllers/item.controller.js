@@ -27,4 +27,21 @@ const createItem = async (req, res, next) => {
     });
 }
 
-module.exports = { getItems, createItem }
+const editItem = async (req, res, next) => {
+    let itemData = {
+        name: req.body.name,
+        price: req.body.price,
+        userId: req.user.id,
+        id: req.body.id
+    }
+
+    item.updateOne({ _id: itemData.id, userId: req.user.id }, { $set: { name: itemData.name, price: itemData.price } }).then((result, err) => {
+        if (result) {
+            sendResponse(res, 200, 200, true, 'Item updated successfully!', result);
+        } else {
+            sendResponse(res, 200, 403, false, 'Item update failed', result);
+        }
+    });
+}
+
+module.exports = { getItems, createItem, editItem }

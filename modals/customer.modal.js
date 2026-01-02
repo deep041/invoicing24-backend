@@ -4,6 +4,8 @@ module.exports = new mongoose.Schema({
     name: { type: String },
     contactNo: { type: String },
     address: { type: String },
+    gstNo: { type: String },
+    stateCode: { type: String },
     userId: { type: mongoose.Schema.Types.ObjectId, ref: 'user' },
     createdAt: { type: Date, default: Date.now() },
     updatedAt: { type: Date, default: Date.now() }
