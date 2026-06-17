@@ -1,14 +1,28 @@
 const customer = require('../modals').customer;
 const sendResponse = require('../utils/response');
+const { parsePagination, buildPaginatedResponse } = require('../utils/pagination');
 
 const getCustomers = async (req, res, next) => {
-    await customer.find({ 'userId': req.user.id }).then((result, err) => {
-        if (result) {
-            sendResponse(res, 200, 200, true, 'Data retrieved successfully', result);
-        } else {
-            sendResponse(res, 200, 404, true, 'Failed', result);
-        }
-    });
+    const { page, limit, skip } = parsePagination(req);
+    const filter = { userId: req.user.id };
+
+    try {
+        const [total, result] = await Promise.all([
+            customer.countDocuments(filter),
+            customer.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit)
+        ]);
+
+        sendResponse(
+            res,
+            200,
+            200,
+            true,
+            'Data retrieved successfully',
+            buildPaginatedResponse(result, total, page, limit)
+        );
+    } catch (error) {
+        sendResponse(res, 500, 500, false, 'Failed to retrieve customers', null);
+    }
 }
 
 const createCustomer = async (req, res, next) => {

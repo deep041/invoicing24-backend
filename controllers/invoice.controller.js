@@ -1,51 +1,66 @@
 const invoice = require('../modals').invoice;
 const invoiceItems = require('../modals').invoiceItems;
 const sendResponse = require('../utils/response');
+const { parsePagination, buildPaginatedResponse } = require('../utils/pagination');
 const mongoose = require('mongoose');
 
 const getInvoices = async (req, res, next) => {
     const userId = new mongoose.Types.ObjectId(req.user.id);
-    await invoice.aggregate([
-        { $match: { userId: userId } },
-        {
-            $lookup: {
-              from: "invoiceitems",          // collection name (NOT model name)
-              localField: "_id",   // field in orders
-              foreignField: "invoiceId",    // field in users
-              as: "items"
-            }
-        },
-        {
-            $addFields: {
-                items: {
-                    $map: {
-                        input: "$items",
-                        as: "item",
-                        in: {
-                            itemTotal: "$$item.netAmount"
+    const { page, limit, skip } = parsePagination(req);
+
+    try {
+        const [result] = await invoice.aggregate([
+            { $match: { userId: userId } },
+            {
+                $lookup: {
+                    from: "invoiceitems",
+                    localField: "_id",
+                    foreignField: "invoiceId",
+                    as: "items"
+                }
+            },
+            {
+                $addFields: {
+                    items: {
+                        $map: {
+                            input: "$items",
+                            as: "item",
+                            in: {
+                                itemTotal: "$$item.netAmount"
+                            }
                         }
                     }
                 }
+            },
+            {
+                $addFields: {
+                    grandTotal: { $subtract: [{ $sum: "$items.itemTotal" }, { $ifNull: ["$totalDiscountAmount", 0] }] }
+                }
+            },
+            {
+                $project: { grandTotal: 1, customerName: '$customerDetails.name', invoiceNumber: 1, invoiceDate: 1 }
+            },
+            { $sort: { invoiceDate: -1 } },
+            {
+                $facet: {
+                    metadata: [{ $count: 'total' }],
+                    data: [{ $skip: skip }, { $limit: limit }]
+                }
             }
-        },
-        {
-            $addFields: {
-                grandTotal: { $subtract: [ { $sum: "$items.itemTotal" }, { $ifNull: ["$totalDiscountAmount", 0] } ] }
-            }
-        },
-        {
-            $project: { grandTotal: 1, customerName: '$customerDetails.name', invoiceNumber: 1, invoiceDate: 1 }
-        },
-        {
-            $sort: { invoiceDate: -1 }
-        }
-    ]).then((result, err) => {
-        if (result) {
-            sendResponse(res, 200, 200, true, 'Data retrieved successfully', result);
-        } else {
-            sendResponse(res, 200, 404, true, 'Error while data fetching', result);
-        }
-    });
+        ]);
+
+        const total = result.metadata[0]?.total || 0;
+        sendResponse(
+            res,
+            200,
+            200,
+            true,
+            'Data retrieved successfully',
+            buildPaginatedResponse(result.data, total, page, limit)
+        );
+    } catch (error) {
+        sendResponse(res, 500, 500, false, 'Error while data fetching', null);
+    }
 }
 
 const createInvoice = async (req, res, next) => {
