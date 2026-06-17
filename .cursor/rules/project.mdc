@@ -1,0 +1,51 @@
+# Invoicing24 Backend Rules
+
+Tech Stack:
+- Node.js
+- Express.js
+- TypeScript
+- Prisma
+- PostgreSQL
+
+Rules:
+- Use TypeScript strict mode.
+- Use Prisma for all database operations.
+- Never write raw SQL unless explicitly required.
+- Create separate layers:
+  - Routes
+  - Controllers
+  - Services
+  - Repositories
+- Validate all request payloads.
+- Add proper error handling.
+- Return consistent API responses.
+- Use async/await.
+- Avoid business logic in routes.
+- Follow REST API conventions.
+- Use environment variables for secrets.
+- Do not expose sensitive information.
+
+API Response Format:
+
+Success:
+{
+  success: true,
+  data: {}
+}
+
+Error:
+{
+  success: false,
+  message: ""
+}
+
+Database:
+- Use Prisma transactions when required.
+- Create migrations for schema changes.
+- Prefer soft delete when applicable.
+
+Code Style:
+- Keep controllers thin.
+- Put business logic inside services.
+- Use dependency injection where possible.
+- Avoid duplicate code.

@@ -15,6 +15,7 @@ const createItem = async (req, res, next) => {
     let itemData = {
         name: req.body.name,
         price: req.body.price,
+        hsnCode: req.body.hsnCode,
         userId: req.user.id
     }
 
@@ -31,6 +32,7 @@ const editItem = async (req, res, next) => {
     let itemData = {
         name: req.body.name,
         price: req.body.price,
+        hsnCode: req.body.hsnCode,
         userId: req.user.id,
         id: req.body.id
     }

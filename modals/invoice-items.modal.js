@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 
 module.exports = new mongoose.Schema({
     name: { type: String },
+    hsnCode: { type: String },
     price: { type: Number },
     quantity: { type: Number },
     discount: { type: Number },

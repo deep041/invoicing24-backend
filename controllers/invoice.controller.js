@@ -35,6 +35,9 @@ const getInvoices = async (req, res, next) => {
         },
         {
             $project: { grandTotal: 1, customerName: '$customerDetails.name', invoiceNumber: 1, invoiceDate: 1 }
+        },
+        {
+            $sort: { invoiceDate: -1 }
         }
     ]).then((result, err) => {
         if (result) {
@@ -61,6 +64,7 @@ const createInvoice = async (req, res, next) => {
         },
         items: req.body.items.map(item => ({
             name: item.name,
+            hsnCode: item.hsnCode,
             price: item.price,
             quantity: item.quantity,
             discount: item.discount,
@@ -91,6 +95,7 @@ const createInvoice = async (req, res, next) => {
         if (result) {
             invoiceItems.insertMany(invoiceData.items.map(item => ({
                 name: item.name,
+                hsnCode: item.hsnCode,
                 price: item.price,
                 quantity: item.quantity,
                 discount: item.discount,
