@@ -1,10 +1,18 @@
 const item = require('../modals').item;
 const sendResponse = require('../utils/response');
 const { parsePagination, buildPaginatedResponse } = require('../utils/pagination');
+const { buildOrFilter } = require('../utils/search');
 
 const getItems = async (req, res, next) => {
     const { page, limit, skip } = parsePagination(req);
-    const filter = { userId: req.user.id };
+    const filter = {
+        userId: req.user.id,
+        ...buildOrFilter(['name', 'hsnCode'], req.query.search)
+    };
+
+    if (req.query.status?.trim()) {
+        filter.status = req.query.status.trim();
+    }
 
     try {
         const [total, result] = await Promise.all([
@@ -30,6 +38,8 @@ const createItem = async (req, res, next) => {
         name: req.body.name,
         price: req.body.price,
         hsnCode: req.body.hsnCode,
+        gstRate: req.body.gstRate ?? 18,
+        unit: req.body.unit ?? req.body.measurement ?? 'nos',
         userId: req.user.id
     }
 
@@ -47,11 +57,13 @@ const editItem = async (req, res, next) => {
         name: req.body.name,
         price: req.body.price,
         hsnCode: req.body.hsnCode,
+        gstRate: req.body.gstRate ?? 18,
+        unit: req.body.unit ?? req.body.measurement ?? 'nos',
         userId: req.user.id,
         id: req.body.id
     }
 
-    item.updateOne({ _id: itemData.id, userId: req.user.id }, { $set: { name: itemData.name, price: itemData.price } }).then((result, err) => {
+    item.updateOne({ _id: itemData.id, userId: req.user.id }, { $set: { name: itemData.name, price: itemData.price, hsnCode: itemData.hsnCode, gstRate: itemData.gstRate, unit: itemData.unit } }).then((result, err) => {
         if (result) {
             sendResponse(res, 200, 200, true, 'Item updated successfully!', result);
         } else {

@@ -1,10 +1,14 @@
 const customer = require('../modals').customer;
 const sendResponse = require('../utils/response');
 const { parsePagination, buildPaginatedResponse } = require('../utils/pagination');
+const { buildOrFilter } = require('../utils/search');
 
 const getCustomers = async (req, res, next) => {
     const { page, limit, skip } = parsePagination(req);
-    const filter = { userId: req.user.id };
+    const filter = {
+        userId: req.user.id,
+        ...buildOrFilter(['name', 'contactNo', 'address', 'gstNo'], req.query.search)
+    };
 
     try {
         const [total, result] = await Promise.all([

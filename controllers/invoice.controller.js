@@ -2,52 +2,61 @@ const invoice = require('../modals').invoice;
 const invoiceItems = require('../modals').invoiceItems;
 const sendResponse = require('../utils/response');
 const { parsePagination, buildPaginatedResponse } = require('../utils/pagination');
+const { buildRegexSearch } = require('../utils/search');
 const mongoose = require('mongoose');
+
+const getNextInvoiceNumber = async (userId) => {
+    const [latest] = await invoice.aggregate([
+        { $match: { userId: new mongoose.Types.ObjectId(userId) } },
+        {
+            $addFields: {
+                invoiceNumberNumeric: {
+                    $convert: { input: '$invoiceNumber', to: 'int', onError: 0, onNull: 0 }
+                }
+            }
+        },
+        { $sort: { invoiceNumberNumeric: -1 } },
+        { $limit: 1 },
+        { $project: { invoiceNumberNumeric: 1 } }
+    ]);
+
+    return (latest?.invoiceNumberNumeric ?? 0) + 1;
+};
 
 const getInvoices = async (req, res, next) => {
     const userId = new mongoose.Types.ObjectId(req.user.id);
     const { page, limit, skip } = parsePagination(req);
+    const searchRegex = buildRegexSearch(req.query.search);
+    const pipeline = [
+        { $match: { userId: userId } },
+        {
+            $project: { grandTotal: 1, customerName: '$customerDetails.name', invoiceNumber: 1, invoiceDate: 1 }
+        }
+    ];
+
+    if (searchRegex) {
+        pipeline.push({
+            $match: {
+                $or: [
+                    { invoiceNumber: searchRegex },
+                    { customerName: searchRegex }
+                ]
+            }
+        });
+    }
+
+    pipeline.push(
+        { $sort: { invoiceDate: -1 } },
+        {
+            $facet: {
+                metadata: [{ $count: 'total' }],
+                data: [{ $skip: skip }, { $limit: limit }]
+            }
+        }
+    );
 
     try {
-        const [result] = await invoice.aggregate([
-            { $match: { userId: userId } },
-            {
-                $lookup: {
-                    from: "invoiceitems",
-                    localField: "_id",
-                    foreignField: "invoiceId",
-                    as: "items"
-                }
-            },
-            {
-                $addFields: {
-                    items: {
-                        $map: {
-                            input: "$items",
-                            as: "item",
-                            in: {
-                                itemTotal: "$$item.netAmount"
-                            }
-                        }
-                    }
-                }
-            },
-            {
-                $addFields: {
-                    grandTotal: { $subtract: [{ $sum: "$items.itemTotal" }, { $ifNull: ["$totalDiscountAmount", 0] }] }
-                }
-            },
-            {
-                $project: { grandTotal: 1, customerName: '$customerDetails.name', invoiceNumber: 1, invoiceDate: 1 }
-            },
-            { $sort: { invoiceDate: -1 } },
-            {
-                $facet: {
-                    metadata: [{ $count: 'total' }],
-                    data: [{ $skip: skip }, { $limit: limit }]
-                }
-            }
-        ]);
+        const [result] = await invoice.aggregate(pipeline);
 
         const total = result.metadata[0]?.total || 0;
         sendResponse(
@@ -69,12 +78,16 @@ const createInvoice = async (req, res, next) => {
             name: req.body.companyDetails.name,
             contactNo: req.body.companyDetails.contactNo,
             address: req.body.companyDetails.address,
+            gstNo: req.body.companyDetails.gstNo,
+            stateCode: req.body.companyDetails.stateCode,
             id: req.body.companyDetails.id
         },
         customerDetails: {
             name: req.body.customerDetails.name,
             contactNo: req.body.customerDetails.contactNo,
             address: req.body.customerDetails.address,
+            gstNo: req.body.customerDetails.gstNo,
+            stateCode: req.body.customerDetails.stateCode,
             id: req.body.customerDetails.id
         },
         items: req.body.items.map(item => ({
@@ -87,6 +100,12 @@ const createInvoice = async (req, res, next) => {
             discountValue: item.discountValue,
             amount: item.amount,
             netAmount: item.netAmount,
+            gstRate: item.gstRate,
+            taxableAmount: item.taxableAmount,
+            gstAmount: item.gstAmount,
+            cgstAmount: item.cgstAmount,
+            sgstAmount: item.sgstAmount,
+            igstAmount: item.igstAmount,
             id: item.id
         })),
         invoiceNumber: req.body.invoiceNumber,
@@ -96,15 +115,16 @@ const createInvoice = async (req, res, next) => {
         total: req.body.total,
         grandTotal: req.body.grandTotal,
         totalDiscountAmount: req.body.totalDiscountAmount,
+        taxableAmount: req.body.taxableAmount,
+        cgstAmount: req.body.cgstAmount,
+        sgstAmount: req.body.sgstAmount,
+        igstAmount: req.body.igstAmount,
+        totalGstAmount: req.body.totalGstAmount,
+        isInterState: req.body.isInterState,
         userId: req.user.id
     }
 
-    let invoiceNumber = await invoice.findOne({ userId: req.user.id }).sort({ invoiceNumber: -1 });
-    if (invoiceNumber && invoiceNumber.invoiceNumber) {
-        invoiceData.invoiceNumber = Number(invoiceNumber.invoiceNumber) + 1;
-    } else {
-        invoiceData.invoiceNumber = 1;
-    }
+    invoiceData.invoiceNumber = await getNextInvoiceNumber(req.user.id);
 
     invoice.create(invoiceData).then((result, err) => {
         if (result) {
@@ -121,6 +141,12 @@ const createInvoice = async (req, res, next) => {
                 discountValue: item.discountValue,
                 amount: item.amount,
                 netAmount: item.netAmount,
+                gstRate: item.gstRate,
+                taxableAmount: item.taxableAmount,
+                gstAmount: item.gstAmount,
+                cgstAmount: item.cgstAmount,
+                sgstAmount: item.sgstAmount,
+                igstAmount: item.igstAmount,
                 userId: req.user.id
             }))).then(result2 => {
                 sendResponse(res, 200, 200, true, 'Invoice created successfully!', [result, result2]);
@@ -154,19 +180,12 @@ const getInvoiceById = async (req, res, next) => {
 }
 
 const getLatestInvoiceNumber = async (req, res, next) => {
-    const userId = req.user.id;
-    console.log(userId)
-    await invoice.findOne({ userId: userId }).sort({ invoiceNumber: -1 }).then((result, err) => {
-        if (result) {
-            let invoiceNumber = 1;
-            if (result && result.invoiceNumber) {
-                invoiceNumber = Number(result.invoiceNumber) + 1;
-            }
-            sendResponse(res, 200, 200, true, 'Data retrieved successfully', { invoiceNumber });
-        } else {
-            sendResponse(res, 200, 404, true, 'Error while data fetching', result);
-        }
-    });
+    try {
+        const invoiceNumber = await getNextInvoiceNumber(req.user.id);
+        sendResponse(res, 200, 200, true, 'Data retrieved successfully', { invoiceNumber });
+    } catch (error) {
+        sendResponse(res, 500, 500, false, 'Error while data fetching', null);
+    }
 }
 
 module.exports = { getInvoices, createInvoice, getInvoiceById, getLatestInvoiceNumber }
