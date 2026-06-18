@@ -6,12 +6,15 @@ require('./config/db.config').connect();
 const express = require('express');
 const cors = require('cors');
 const logger = require('./middleware/logger');
+const { decryptRequest, encryptResponse } = require('./middleware/encryption');
 
 const app = express();
 
 app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(encryptResponse);
+app.use(decryptRequest);
 
 app.use(logger);
 
